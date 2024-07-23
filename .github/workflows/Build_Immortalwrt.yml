@@ -1,4 +1,4 @@
-name: Build_x86_64
+name: Build_Immortalwrt
 
 on:
   repository_dispatch:
@@ -10,19 +10,19 @@ on:
         default: 'false'
 
 env:
-  REPO_URL: https://github.com/coolsnowwolf/lede
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: master
   FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: x86/ceshi-x86.config
+  CONFIG_FILE: immortalwrt.config
   DIY_P1_SH: diy-part1.sh
-  DIY_P2_SH: x86/ceshi-x86.sh
+  DIY_P2_SH: diy-part4.sh
   SSH_ACTIONS: false
   UPLOAD_BIN_DIR: false
-  UPLOAD_FIRMWARE: true
-  UPLOAD_RELEASE: false
+  UPLOAD_FIRMWARE: false
+  UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
-  FILE_NAME: x86_64
-  PRODUCT_NAME: x86_64
+  FILE_NAME: Armv8_Immortalwrt
+  PRODUCT_NAME: Armv8_Immortalwrt
 
 jobs:
   Build:
@@ -233,7 +233,7 @@ jobs:
         body: |
           - ⭐️此为 ${{ env.FILE_NAME }}_${{ env.KERNEL }} 固件
           - 🔴默认IP：10.0.0.1 默认密码：password
-          - 当前使用版本:【编译前的最后一次[➦主源码](https://github.com/coolsnowwolf/lede)更新记录】
+          - 当前使用版本:【编译前的最后一次[➦主源码](https://github.com/immortalwrt/immortalwrt)更新记录】
           - ★ 感谢源码作者无私分享！
           - 🎈🎈🎈 更新信息 🎈🎈🎈
           - 作者: ${{ env.author }}
