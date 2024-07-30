@@ -138,6 +138,9 @@ ln -sf ../../../feeds/packages/net/zerotier ./package/feeds/packages/zerotier
 #cp -rf immortalwrt-packages/libs/libcron feeds/packages/libs/libcron
 #ln -sf ../../../feeds/packages/libs/libcron ./package/feeds/packages/libcron
 
+# 修改系统文件
+sed -i 's/WireGuard/WiGd状态/g' feeds/luci/protocols/luci-proto-wireguard/root/usr/share/luci/menu.d/luci-proto-wireguard.json
+
 # mihomo
 git clone https://$github/morytyann/OpenWrt-mihomo  package/new/openwrt-mihomo
 mkdir -p files/etc/mihomo/run/ui
