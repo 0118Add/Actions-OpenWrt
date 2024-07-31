@@ -9,12 +9,15 @@
 	local util = require "luci.util"
 	local stat = require "luci.tools.status"
 	local ver = require "luci.version"
+
 	local has_ipv6 = fs.access("/usr/sbin/ip6tables")
 	local has_dhcp = fs.access("/etc/config/dhcp")
 	local has_wifi = ((fs.stat("/etc/config/wireless", "size") or 0) > 0)
+
 	local sysinfo = luci.util.ubus("system", "info") or { }
 	local boardinfo = luci.util.ubus("system", "board") or { }
 	local unameinfo = nixio.uname() or { }
+
 	local meminfo = sysinfo.memory or {
 		total = 0,
 		free = 0,
@@ -46,21 +49,21 @@
 		local cpu_info = luci.sys.exec("cpuinfo")
 
 		local eth_info = luci.sys.exec("ethinfo")
-		local cpu_wd = (luci.sys.exec("sensors 2>/dev/null | grep 'Core 0' | cut -c12-  | awk  -F '°' '{print $1}' ") or "无温控或虚拟机 0") .. "°C"
+
 		local user_info = luci.sys.exec("cat /proc/net/arp | grep '0x2' | wc -l") or 0
+		
 		local cpu_usage = (luci.sys.exec("expr 100 - $(top -n 1 | grep 'CPU:' | awk -F '%' '{print$4}' | awk -F ' ' '{print$2}')") or "6") .. "%"
-                local run_time = luci.sys.exec("awk '{print int($1/86400)\"天 \"int($1%86400/3600)\"时 \"int($1%86400%3600/60)\"分 \"int($1%60)\"秒\"}' /proc/uptime")
-                local ram_size = luci.sys.exec("free -m | grep Mem | awk '{print $2/1024}'")
-		local rv = {
+
+		local run_time = luci.sys.exec("awk '{print int($1/86400)\"天 \"int($1%86400/3600)\"时 \"int($1%86400%3600/60)\"分 \"int($1%60)\"秒\"}' /proc/uptime")
+	        
+	        local rv = {
 			cpuusage    = cpu_usage,
-			cpuinfo    = cpu_info,
-			cpuwd    = cpu_wd,
+			runtime = run_time,
+	                cpuinfo    = cpu_info,
 			ethinfo    = eth_info,
 			userinfo    = user_info,
-                        ramsize    = ram_size,
-			runtime = run_time,
-                        uptime     = sysinfo.uptime or 0,
-			localtime  = os.date("%Y年%m月%d日") .. " " .. translate(os.date("%A")) .. " " .. os.date("%X"),
+			uptime     = sysinfo.uptime or 0,
+			localtime  = os.date("%Y-%m-%d") .. " " .. translate(os.date("%A")) .. " " .. os.date("%X"),
 			loadavg    = sysinfo.load or { 0, 0, 0 },
 			memory     = meminfo,
 			memcached  = mem_cached,
@@ -187,6 +190,20 @@
 			hosts = data;
 		});
 	}
+
+	var compare = function (prop) {
+		return function (obj1, obj2) {
+			var val1 = Number(obj1[prop].replaceAll(".",""));
+			var val2 = Number(obj2[prop].replaceAll(".",""));
+			if (val1 < val2) {
+				return -1;
+			} else if (val1 > val2) {
+				return 1;
+			} else {
+				return 0;
+			}
+		}
+	};
 
 	XHR.poll(1, '<%=REQUEST_URI%>', { status: 1 },
 		function(x, info)
@@ -381,6 +398,7 @@
 			var ls = document.getElementById('lease_status_table');
 			if (ls)
 			{
+				info.leases = info.leases.sort(compare("ipaddr"));
 				/* clear all rows */
 				while( ls.rows.length > 1 )
 					ls.rows[0].parentNode.deleteRow(1);
@@ -667,24 +685,17 @@
 			if (e = document.getElementById('uptime'))
 				e.innerHTML = String.format('%t', info.uptime);
 
-			if (e = document.getElementById('runtime'))
-                                e.innerHTML = info.runtime;
-
-                        if (e = document.getElementById('userinfo'))
+			if (e = document.getElementById('userinfo'))
 				e.innerHTML = info.userinfo;
 
 			if (e = document.getElementById('cpuinfo'))
 				e.innerHTML = info.cpuinfo;
-
-			if (e = document.getElementById('cpuwd'))
-				e.innerHTML = info.cpuwd;
 				
-			if (e = document.getElementById('cpuusage'))
+			if (e = document.getElementById('runtime'))
+				e.innerHTML = info.runtime;
+	
+	                if (e = document.getElementById('cpuusage'))
 				e.innerHTML = info.cpuusage;
-
-
-			if (e = document.getElementById('ramsize'))
-                e.innerHTML =  String.format('%.0f', info.ramsize)+ " <%:MB%>";
 
 			if (e = document.getElementById('loadavg'))
 				e.innerHTML = String.format(
@@ -697,20 +708,6 @@
 			if (e = document.getElementById('memtotal'))
 				e.innerHTML = progressbar(
 					Math.floor(((info.memory.free + info.memory.buffered) / 1048576) + (info.memcached / 1024)) + " <%:MB%>",
-					Math.floor(info.memory.total / 1048576) + " <%:MB%>"
-
-				);
-
-			if (e = document.getElementById('memfree'))
-				e.innerHTML = progressbar(
-					Math.floor((((info.memory.total - info.memory.free )- info.memory.buffered) / 1048576) - (info.memcached / 1024)) + " <%:MB%>",
-					Math.floor(info.memory.total / 1048576) + " <%:MB%>"
-
-				);
-
-			if (e = document.getElementById('memcach'))
-				e.innerHTML = progressbar(
-					Math.floor(info.memory.memcached / 1048576) + " <%:MB%>",
 					Math.floor(info.memory.total / 1048576) + " <%:MB%>"
 				);
 
@@ -746,26 +743,25 @@
 
 	<table width="100%" cellspacing="10">
 		<tr><td width="33%"><%:Hostname%></td><td><%=luci.sys.hostname() or "?"%></td></tr>
-		<tr><td width="33%"><%:型号参数%></td><td><%=pcdata(boardinfo.model or "?")%> <%=luci.sys.exec("cat /etc/bench.log") or " "%></td></tr>
-		<tr><td width="33%"><%:实时频率%></td><td id="cpuinfo">-</td></tr>
-		<tr><td width="33%"><%:内核温度%></td><td id="cpuwd">-</td></tr>
-                <tr><td width="33%"><%:CPU负载%></td><td id="cpuusage">-</td></tr>
-                <tr><td width="33%"><%:Load Average%></td><td id="loadavg">-</td></tr>
-                <tr><td width="33%"><%:Firmware Version%></td><td>
+		<tr><td width="33%"><%:Model%></td><td><%=pcdata(boardinfo.model or "?")%> <%=luci.sys.exec("cat /etc/bench.log") or " "%></td></tr>
+		<tr><td width="33%"><%:目标平台%></td><td><%=pcdata(boardinfo.release.target or "?")%></td></tr>
+		<tr><td width="33%"><%:CPU Info%></td><td id="cpuinfo">-</td></tr>
+		<tr><td width="33%"><%:CPU 负载%></td><td id="cpuusage">-</td></tr>
+		<tr><td width="33%"><%:Load Average%></td><td id="loadavg">-</td></tr>
+		<tr><td width="33%"><%:Firmware Version%></td><td>
 			<%=pcdata(ver.distname)%> <%=pcdata(ver.distversion)%>
 		</td></tr>
 		<tr><td width="33%"><%:Kernel Version%></td><td><%=unameinfo.release or "?"%></td></tr>
 		<tr><td width="33%"><%:Local Time%></td><td id="localtime">-</td></tr>
 		<tr><td width="33%"><%:Uptime%></td><td id="runtime">-</td></tr>
-        </table>
+	</table>
 </fieldset>
-
 
 <fieldset class="cbi-section">
 	<legend><%:Memory%></legend>
+
 	<table width="100%" cellspacing="10">
-		<tr><td width="33%"><%:可用数%></td><td id="memtotal">-</td></tr>
-		<tr><td width="33%"><%:已使用%></td><td id="memfree">-</td></tr>
+		<tr><td width="33%"><%:Total Available%></td><td id="memtotal">-</td></tr>
 		<tr><td width="33%"><%:Buffered%></td><td id="membuff">-</td></tr>
 	</table>
 </fieldset>
@@ -780,12 +776,14 @@
 	</table>
 </fieldset>
 <% end %>
+
 <fieldset class="cbi-section">
 	<legend><%:Interfaces%></legend>
 
 	<table width="100%" cellspacing="10" id="ethinfo">
 	</table>
 </fieldset>
+
 <fieldset class="cbi-section">
 	<legend><%:Network%></legend>
 
@@ -867,35 +865,6 @@
 		<tr><td><em><%:Collecting data...%></em></td></tr>
 	</table>
 </fieldset>
-<fieldset class="cbi-section">
-	<legend><%:Associated Stations%></legend>
-
-	<table class="cbi-section-table valign-middle" id="wifi_assoc_table">
-		<tr class="cbi-section-table-titles">
-			<th class="cbi-section-table-cell">&#160;</th>
-			<th class="cbi-section-table-cell"><%:Network%></th>
-			<th class="cbi-section-table-cell"><%:MAC-Address%></th>
-			<th class="cbi-section-table-cell"><%:Host%></th>
-			<th class="cbi-section-table-cell"><%:Signal%> / <%:Noise%></th>
-			<th class="cbi-section-table-cell"><%:RX Rate%> / <%:TX Rate%></th>
-		</tr>
-		<tr class="cbi-section-table-row">
-			<td colspan="6"><em><br /><%:Collecting data...%></em></td>
-		</tr>
-	</table>
-</fieldset>
 <% end %>
-
-<%-
-	local incdir = util.libpath() .. "/view/admin_status/index/"
-	if fs.access(incdir) then
-		local inc
-		for inc in fs.dir(incdir) do
-			if inc:match("%.htm$") then
-				include("admin_status/index/" .. inc:gsub("%.htm$", ""))
-			end
-		end
-	end
--%>
 
 <%+footer%>
